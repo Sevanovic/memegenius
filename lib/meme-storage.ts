@@ -2,17 +2,20 @@ import fs from "fs";
 import path from "path";
 
 // ============================================================
-// lib/meme-storage.ts — Stockage des memes sur le filesystem
+// lib/meme-storage.ts — Stockage des memes
 //
-// Chaque meme est sauvegardé comme :
-// - /public/memes/{id}.png   → l'image du meme
-// - /public/memes/{id}.json  → les métadonnées (template, texts, etc.)
+// Sur Vercel : utilise /tmp/ (seul dossier inscriptible)
+// En local : utilise public/memes/
 //
-// C'est une solution simple pour le MVP. Plus tard on migrera
-// vers Supabase Storage ou S3.
+// NOTE : /tmp/ sur Vercel est éphémère — les fichiers sont perdus
+// entre les invocations de fonction. C'est OK pour le MVP.
+// Pour la persistence, il faudra migrer vers Supabase Storage.
 // ============================================================
 
-const MEMES_DIR = path.join(process.cwd(), "public", "memes");
+const IS_VERCEL = !!process.env.VERCEL;
+const MEMES_DIR = IS_VERCEL
+  ? path.join("/tmp", "memes")
+  : path.join(process.cwd(), "public", "memes");
 
 export interface MemeData {
   id: string;
@@ -23,14 +26,16 @@ export interface MemeData {
   created_at: string;
 }
 
-// Assurer que le dossier existe
 function ensureDir() {
-  if (!fs.existsSync(MEMES_DIR)) {
-    fs.mkdirSync(MEMES_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(MEMES_DIR)) {
+      fs.mkdirSync(MEMES_DIR, { recursive: true });
+    }
+  } catch {
+    // Silently fail — saving is optional
   }
 }
 
-// Générer un ID court unique (8 chars)
 export function generateMemeId(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   let id = "";
@@ -40,39 +45,39 @@ export function generateMemeId(): string {
   return id;
 }
 
-// Sauvegarder un meme (image + métadonnées)
 export function saveMeme(
   id: string,
   imageBase64: string,
   data: Omit<MemeData, "id" | "created_at">
-): MemeData {
-  ensureDir();
+): MemeData | null {
+  try {
+    ensureDir();
 
-  // Sauvegarder l'image PNG
-  const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-  const imageBuffer = Buffer.from(base64Data, "base64");
-  fs.writeFileSync(path.join(MEMES_DIR, `${id}.png`), imageBuffer);
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    const imageBuffer = Buffer.from(base64Data, "base64");
+    fs.writeFileSync(path.join(MEMES_DIR, `${id}.png`), imageBuffer);
 
-  // Sauvegarder les métadonnées
-  const memeData: MemeData = {
-    id,
-    ...data,
-    created_at: new Date().toISOString(),
-  };
-  fs.writeFileSync(
-    path.join(MEMES_DIR, `${id}.json`),
-    JSON.stringify(memeData, null, 2)
-  );
+    const memeData: MemeData = {
+      id,
+      ...data,
+      created_at: new Date().toISOString(),
+    };
+    fs.writeFileSync(
+      path.join(MEMES_DIR, `${id}.json`),
+      JSON.stringify(memeData, null, 2)
+    );
 
-  return memeData;
+    return memeData;
+  } catch {
+    // Save failed (read-only fs, etc.) — not critical
+    return null;
+  }
 }
 
-// Récupérer les métadonnées d'un meme
 export function getMeme(id: string): MemeData | null {
-  const jsonPath = path.join(MEMES_DIR, `${id}.json`);
-  if (!fs.existsSync(jsonPath)) return null;
-
   try {
+    const jsonPath = path.join(MEMES_DIR, `${id}.json`);
+    if (!fs.existsSync(jsonPath)) return null;
     const raw = fs.readFileSync(jsonPath, "utf-8");
     return JSON.parse(raw);
   } catch {
@@ -80,23 +85,17 @@ export function getMeme(id: string): MemeData | null {
   }
 }
 
-// Vérifier si l'image d'un meme existe
 export function memeImageExists(id: string): boolean {
-  return fs.existsSync(path.join(MEMES_DIR, `${id}.png`));
+  try {
+    return fs.existsSync(path.join(MEMES_DIR, `${id}.png`));
+  } catch {
+    return false;
+  }
 }
 
-// Lister les derniers memes (pour la future galerie)
-export function getRecentMemes(limit: number = 20): MemeData[] {
-  ensureDir();
-
-  const files = fs.readdirSync(MEMES_DIR)
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => {
-      const raw = fs.readFileSync(path.join(MEMES_DIR, f), "utf-8");
-      return JSON.parse(raw) as MemeData;
-    })
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, limit);
-
-  return files;
+// Retourne le chemin du fichier image pour le servir
+export function getMemeImagePath(id: string): string | null {
+  const imgPath = path.join(MEMES_DIR, `${id}.png`);
+  if (fs.existsSync(imgPath)) return imgPath;
+  return null;
 }

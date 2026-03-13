@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Meme not found — MemeGenius" };
   }
 
-  const imageUrl = `/memes/${id}.png`;
+  const imageUrl = `/api/meme?id=${id}`;
 
   return {
     title: `${meme.template_name} meme — MemeGenius`,
@@ -68,7 +68,7 @@ export default async function MemePage({ params }: PageProps) {
     notFound();
   }
 
-  const imageUrl = `/memes/${id}.png`;
+  const imageUrl = `/api/meme?id=${id}`;
 
   return (
     <div
