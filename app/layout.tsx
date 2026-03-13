@@ -1,9 +1,10 @@
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
-  title: "MemeGenius — Génère des memes viraux avec l'IA",
+  title: "MemeGenius — AI-powered meme generator",
   description:
-    "Tape une idée → l'IA crée le meme parfait en 1 clic. Gratuit.",
+    "Type any idea → AI creates the perfect meme in 2 seconds. Free.",
 };
 
 export default function RootLayout({
@@ -12,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="fr">
+    <html lang="en">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -25,7 +26,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
